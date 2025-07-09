@@ -1,0 +1,46 @@
+# Exclude original documentation and scratch files
+scratch.txt
+docs/
+
+# Common ignore patterns
+*.log
+*.tmp
+temp-*
+.DS_Store
+.env
+.env.local
+.env.production
+.env.development
+.vscode/
+.idea/
+
+# Go specific
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+go.work
+vendor/
+
+# Node.js specific  
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+build/
+
+# Docker
+.dockerignore
+
+# Test coverage
+coverage/
+*.cover
+*.coverprofile
+
+# Temporary directories
+tmp/
+temp/
