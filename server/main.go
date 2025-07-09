@@ -150,38 +150,6 @@ func validateFiles(c *gin.Context) {
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Save wiring file to temporary location
-	wiringFile := wiringFiles[0]
-	wiringPath := filepath.Join(tempDir, "wiring.yaml")
-	if err := c.SaveUploadedFile(wiringFile, wiringPath); err != nil {
-		c.JSON(http.StatusInternalServerError, ValidateResponse{
-			Success: false,
-			Message: "Failed to save wiring file",
-			Error:   err.Error(),
-		})
-		return
-	}
-
-	// Initialize hhfab command arguments
-	var initArgs []string
-	if useCase == "uc1" {
-		// Use case 1: wiring only, generate default fab.yaml
-		initArgs = []string{"init", "--dev", "-w", wiringPath}
-	} else {
-		// Use case 2: save fab file and use both
-		fabFile := fabFiles[0]
-		fabPath := filepath.Join(tempDir, "fab.yaml")
-		if err := c.SaveUploadedFile(fabFile, fabPath); err != nil {
-			c.JSON(http.StatusInternalServerError, ValidateResponse{
-				Success: false,
-				Message: "Failed to save fab file",
-				Error:   err.Error(),
-			})
-			return
-		}
-		initArgs = []string{"init", "-c", fabPath, "-w", wiringPath}
-	}
-
 	// Create working directory for hhfab
 	workDir := filepath.Join(tempDir, "work")
 	if err := os.MkdirAll(workDir, 0755); err != nil {
@@ -193,12 +161,12 @@ func validateFiles(c *gin.Context) {
 		return
 	}
 
-	// Run hhfab init
-	initCmd := exec.Command("hhfab", initArgs...)
+	// Initialize hhfab directory (without any files to avoid validation during init)
+	initCmd := exec.Command("hhfab", "init", "--dev")
 	initCmd.Dir = workDir
 	initOutput, err := initCmd.CombinedOutput()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, ValidateResponse{
+		c.JSON(http.StatusInternalServerError, ValidateResponse{
 			Success: false,
 			Message: "Failed to initialize hhfab",
 			Error:   fmt.Sprintf("hhfab init failed: %s", err.Error()),
@@ -208,7 +176,56 @@ func validateFiles(c *gin.Context) {
 		return
 	}
 
-	// Run hhfab validate
+	// Create include directory
+	includeDir := filepath.Join(workDir, "include")
+	if err := os.MkdirAll(includeDir, 0755); err != nil {
+		c.JSON(http.StatusInternalServerError, ValidateResponse{
+			Success: false,
+			Message: "Failed to create include directory",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	// Save wiring file to include directory
+	wiringFile := wiringFiles[0]
+	wiringPath := filepath.Join(includeDir, "wiring.yaml")
+	if err := c.SaveUploadedFile(wiringFile, wiringPath); err != nil {
+		c.JSON(http.StatusInternalServerError, ValidateResponse{
+			Success: false,
+			Message: "Failed to save wiring file",
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	// Handle UC2: Replace default fab.yaml with user-provided one
+	if useCase == "uc2" {
+		// Remove the default fab.yaml
+		defaultFabPath := filepath.Join(workDir, "fab.yaml")
+		if err := os.Remove(defaultFabPath); err != nil {
+			c.JSON(http.StatusInternalServerError, ValidateResponse{
+				Success: false,
+				Message: "Failed to remove default fab.yaml",
+				Error:   err.Error(),
+			})
+			return
+		}
+
+		// Save user-provided fab.yaml
+		fabFile := fabFiles[0]
+		fabPath := filepath.Join(workDir, "fab.yaml")
+		if err := c.SaveUploadedFile(fabFile, fabPath); err != nil {
+			c.JSON(http.StatusInternalServerError, ValidateResponse{
+				Success: false,
+				Message: "Failed to save fab file",
+				Error:   err.Error(),
+			})
+			return
+		}
+	}
+
+	// Run hhfab validate and capture exact output
 	validateCmd := exec.Command("hhfab", "validate")
 	validateCmd.Dir = workDir
 	validateOutput, err := validateCmd.CombinedOutput()
@@ -216,31 +233,20 @@ func validateFiles(c *gin.Context) {
 	outputStr := string(validateOutput)
 	
 	if err != nil {
-		// Check if it's a validation error (expected) vs system error
-		if strings.Contains(outputStr, "ERR") {
-			c.JSON(http.StatusBadRequest, ValidateResponse{
-				Success: false,
-				Message: "Validation failed",
-				Error:   extractErrorMessage(outputStr),
-				Output:  outputStr,
-				UseCase: useCase,
-			})
-		} else {
-			c.JSON(http.StatusInternalServerError, ValidateResponse{
-				Success: false,
-				Message: "Failed to run validation",
-				Error:   err.Error(),
-				Output:  outputStr,
-				UseCase: useCase,
-			})
-		}
+		// Return exact validation output regardless of success/failure
+		c.JSON(http.StatusBadRequest, ValidateResponse{
+			Success: false,
+			Message: outputStr, // Use exact output as message
+			Output:  outputStr,
+			UseCase: useCase,
+		})
 		return
 	}
 
-	// Success
+	// Success - return exact validation output
 	c.JSON(http.StatusOK, ValidateResponse{
 		Success: true,
-		Message: "Fabricator config and wiring are valid",
+		Message: outputStr, // Use exact output as message
 		Output:  outputStr,
 		UseCase: useCase,
 	})

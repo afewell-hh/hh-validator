@@ -95,11 +95,12 @@ func setupTestServer() *gin.Engine {
 			useCase = "uc2"
 		}
 
-		// Mock successful validation
+		// Mock successful validation with exact hhfab output format
+		mockOutput := "06:37:39 INF Hedgehog Fabricator version=v0.40.0\n06:37:39 INF Wiring hydrated successfully mode=if-not-present\n06:37:39 INF Fabricator config and wiring are valid"
 		c.JSON(http.StatusOK, ValidateResponse{
 			Success: true,
-			Message: "Fabricator config and wiring are valid",
-			Output:  "Mock validation output",
+			Message: mockOutput,
+			Output:  mockOutput,
 			UseCase: useCase,
 		})
 	})
@@ -213,7 +214,8 @@ spec:
 
 	assert.True(t, response.Success)
 	assert.Equal(t, "uc1", response.UseCase)
-	assert.Contains(t, response.Message, "valid")
+	assert.Contains(t, response.Message, "Fabricator config and wiring are valid")
+	assert.Contains(t, response.Message, "INF Hedgehog Fabricator version")
 }
 
 func TestValidateWithBothFiles(t *testing.T) {
@@ -284,6 +286,7 @@ metadata:
 
 	assert.True(t, response.Success)
 	assert.Equal(t, "uc2", response.UseCase)
+	assert.Contains(t, response.Message, "Fabricator config and wiring are valid")
 }
 
 func TestErrorMessageExtraction(t *testing.T) {
