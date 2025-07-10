@@ -246,6 +246,3 @@ spec:
 - Review [development guidelines](docs/project/DEVELOPMENT.md)
 - Check [architecture documentation](docs/project/ARCHITECTURE.md)
 
-## License
-
-This project is licensed under the MIT License.
